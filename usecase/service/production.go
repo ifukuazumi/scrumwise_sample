@@ -2,10 +2,13 @@ package service
 
 import (
 	"fmt"
+
 	"github.com/ifukuazumi/scrumwise_sample/log"
 	"github.com/ifukuazumi/scrumwise_sample/model"
 	"github.com/ifukuazumi/scrumwise_sample/usecase/repository"
 )
+
+const channelBuffer  = 5
 
 // Production is
 type Production interface {
@@ -22,57 +25,62 @@ func NewProduction (productionRepository repository.Production) Production {
 
 
 func (p *productionImpl) GetScrumwise() error {
-	backlogData, err := p.ProductionRepository.GetBacklogs()
+	data, err := p.ProductionRepository.GetAll()
 	if err != nil {
 		fmt.Sprintln("p.ProductionRepository.Get()でエラーが起きました")
 	}
 
-	sprintData, err := p.ProductionRepository.GetSprints()
-	if err != nil {
-		fmt.Sprintln("p.ProductionRepository.Get()でエラーが起きました")
-	}
+	var backlogs []model.Backlog
+	for _, backlog := range data.Backlogs {
+		backlogs = append(backlogs, backlog)
+		if backlog.ChildBacklogItems == nil {
+			continue
+		}
 
-	//_, err = p.ProductionRepository.GetTags()
-	//if err != nil {
-	//	fmt.Sprintln("p.ProductionRepository.Get()でエラーが起きました")
-	//}
-
-	_, err = p.collectTasksForEachSprint(backlogData, sprintData)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (p *productionImpl) collectTasksForEachSprint(backlogData, sprintData *model.Result) ([]model.Task, error) {
-	//var allTasks []model.Task
-	for _, projectItemForSprint := range sprintData.Projects {
-		for _, sprintItem := range projectItemForSprint.Sprints {
-			log.Logger.Println("sprint: ",sprintItem.Name, sprintItem.ID)
-			var allTasks []model.Task
-			for _, projectItemForBacklog := range backlogData.Projects {
-				for _, backlogItem := range projectItemForBacklog.Backlogs {
-					if sprintItem.ID == backlogItem.SprintID {
-						allTasks = append(allTasks, backlogItem.Tasks...)
-						//log.Logger.Println("task: ", len(allTasks), "個, sprintName: ",sprintItem.Name, ", backlogName: ",backlogItem.Name)
-					}
-					if len(backlogItem.ChildBacklogItems) > 0 {
-						for _, child := range backlogItem.ChildBacklogItems {
-							if sprintItem.ID == child.SprintID {
-								allTasks = append(allTasks, child.Tasks...)
-								//log.Logger.Println("task: ", len(allTasks), "個, sprintName: ",sprintItem.Name, ", childBacklogName: ",child.Name)
-							}
-
-						}
-					}
-				}
-				log.Logger.Println("allTask: ", len(allTasks), "個, splintID: ", sprintItem.ID, ", sprintName: ",sprintItem.Name)
-				//log.Logger.Println(allTasks)
-				log.Logger.Println("=========================")
+		for _, child := range backlog.ChildBacklogItems {
+			backlogs = append(backlogs, child)
+			if child.ChildBacklogItems == nil {
+				continue
+			}
+			for _, child2 := range child.ChildBacklogItems {
+				backlogs = append(backlogs, child2)
 			}
 		}
 	}
-	//return allTasks, nil
-	return nil, nil
+
+	tagID, err := p.ProductionRepository.GetTagID()
+	if err != nil {
+		fmt.Sprintln("p.ProductionRepository.Get()でエラーが起きました")
+	}
+
+	var sprintBacklogs []model.SprintBacklogs
+	for _, sprint := range data.Sprints {
+		splintID := sprint.ID
+		tagCount := 0
+		var targetBacklogs []model.Backlog
+		for _, backlog := range backlogs {
+			if splintID == backlog.SprintID {
+				targetBacklogs = append(targetBacklogs, backlog)
+			}
+		}
+		for _, sprintBacklog := range targetBacklogs {
+			for _, task := range sprintBacklog.Tasks {
+				for _, tagNums := range task.TagIDs {
+					if tagNums == tagID {
+						tagCount++
+					} 
+				}
+			}
+		}
+		
+		log.Logger.Println(sprint.Name, ", ", tagCount,"個")
+		
+		sprintBacklogs = append(sprintBacklogs, model.SprintBacklogs{
+			Sprint:   sprint,
+			Backlogs: targetBacklogs,
+		})
+	}
+
+
+	return nil
 }

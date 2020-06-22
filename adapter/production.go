@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/cenkalti/backoff"
-	"github.com/ifukuazumi/scrumwise_sample/log"
 	"github.com/ifukuazumi/scrumwise_sample/model"
 	"github.com/ifukuazumi/scrumwise_sample/usecase/repository"
 	"github.com/pkg/errors"
@@ -36,53 +35,41 @@ func NewScrumwise(credentialUserName, credentialPassword, projectID, tagName str
 	}
 }
 
-// GetBacklogs Backlog情報を取得する
-func (s *Scrumwise) GetBacklogs() (*model.Result, error) {
-	byteArray, err := s.request(http.MethodGet, url, "Project.backlogItems,BacklogItem.tasks", nil)
-	if err != nil {
-		fmt.Println("byteArrayでエラーが起きたよ")
-		return nil, errors.WithStack(err)
-	}
-
-	var data *model.Response
-	if err := json.Unmarshal(byteArray, &data); err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return &data.Result, nil
-}
-
-// GetSprints Sprint情報を取得する
-func (s *Scrumwise) GetSprints() (*model.Result, error) {
-	byteArray, err := s.request(http.MethodGet, url, "Project.sprints", nil)
-	if err != nil {
-		fmt.Println("byteArrayでエラーが起きたよ")
-		return nil, errors.WithStack(err)
-	}
-
-	var data *model.Response
-	if err := json.Unmarshal(byteArray, &data); err != nil {
-		return nil, errors.WithStack(err)
-	}
-
-	return &data.Result, nil
-}
-
 // GetTags Tag情報を取得する
-func (s *Scrumwise) GetTags() (*model.Result, error) {
+func (s *Scrumwise) GetTagID() (string, error) {
 	byteArray, err := s.request(http.MethodGet, url, "Project.tags", nil)
 	if err != nil {
 		fmt.Println("byteArrayでエラーが起きたよ")
+		return "", errors.WithStack(err)
+	}
+	var data *model.Response
+	if err := json.Unmarshal(byteArray, &data); err != nil {
+		return "", errors.WithStack(err)
+	}
+
+	for _, backlogs := range data.Result.Projects[0].Tags {
+		if backlogs.Name == s.TagName {
+			return backlogs.ID, nil
+		}
+	}
+	return "", nil
+}
+
+// GetAll 全ての情報を取得する
+func (s *Scrumwise) GetAll() (*model.Project, error) {
+	byteArray, err := s.request(http.MethodGet, url, "Project.sprints,Project.backlogItems,BacklogItem.tasks,Project.tags", nil)
+	if err != nil {
+		fmt.Println("byteArrayでエラーが起きたよ")
 		return nil, errors.WithStack(err)
 	}
-	log.Logger.Printf(string(byteArray))
 
 	var data *model.Response
 	if err := json.Unmarshal(byteArray, &data); err != nil {
 		return nil, errors.WithStack(err)
 	}
-
-	return &data.Result, nil
+	
+	// 1Project単位でしか見ないため、[0]番目を取得する
+	return &data.Result.Projects[0], nil
 }
 
 func (s *Scrumwise) request(method, url, includeProperties string, body io.Reader) ([]byte, error) {
