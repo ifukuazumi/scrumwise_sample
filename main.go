@@ -15,7 +15,7 @@ func main() {
 	// 実行環境変数の読み込み
 	appConfig, err := model.NewAppConfig()
 	if err != nil {
-		log.Logger.Printf("システムエラーが発生しました")
+		log.Logger.Fatal(err)
 	}
 
 	// ロガーの初期設定
@@ -23,7 +23,7 @@ func main() {
 
 	// envファイル環境変数の読み込み
 	if err := infra.LoadEnvFile(appConfig.AppEnv); err != nil {
-		log.Logger.Println("システムエラーが発生しました")
+		log.Logger.Fatal(err)
 	}
 
 	credentialUserName := os.Getenv("SCRUMWISE_CREDENTIAL_USER_NAME")
@@ -33,8 +33,17 @@ func main() {
 	productionRepository := adapter.NewScrumwise(credentialUserName, credentialPassword, projectID, tagName)
 
 	productionService := service.NewProduction(productionRepository)
-	if err = productionService.GetScrumwise(); err != nil {
-		log.Logger.Println("productionService.GetScrumwiseでエラーがでたよ")
+	tagID, err := productionService.GetTagID()
+	if err != nil {
+		log.Logger.Fatal(err)
+	}
+	result, err := productionService.GetScrumwise()
+	if err != nil {
+		log.Logger.Fatal(err)
+	}
+
+	for _, sprintBacklogs := range result {
+		log.Logger.Println(sprintBacklogs.Sprint.Name, ", ", sprintBacklogs.TagCount(tagID), "個")
 	}
 
 }

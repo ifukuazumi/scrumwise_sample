@@ -47,6 +47,34 @@ type SprintBacklogs struct {
 	Backlogs []Backlog
 }
 
+func NewSprintBacklogs(sprint Sprint, backlogs []Backlog) SprintBacklogs {
+	splintID := sprint.ID
+	var targetBacklogs []Backlog
+	for _, backlog := range backlogs {
+		if splintID == backlog.SprintID {
+			targetBacklogs = append(targetBacklogs, backlog)
+		}
+	}
+	return SprintBacklogs{
+		Sprint:   sprint,
+		Backlogs: targetBacklogs,
+	}
+}
+
+func (sb *SprintBacklogs) TagCount(tagID string) int {
+	tagCount := 0
+	for _, sprintBacklog := range sb.Backlogs {
+		for _, task := range sprintBacklog.Tasks {
+			for _, tagNums := range task.TagIDs {
+				if tagNums == tagID {
+					tagCount++
+				}
+			}
+		}
+	}
+	return tagCount
+}
+
 // Tag is
 type Tag struct {
 	ID   string `json:"id"`
